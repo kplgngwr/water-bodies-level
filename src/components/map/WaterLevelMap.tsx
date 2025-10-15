@@ -211,18 +211,24 @@ export default function WaterLevelMap({
   }, [stations, activeRegion, activeStatuses]);
 
   const markers = useMemo(() => {
-    return filteredStations.map(station => (
-      <Marker
-        key={station.id}
-        longitude={station.location.lng}
-        latitude={station.location.lat}
-        color={getMarkerColor(station.status)}
-        onClick={e => {
-          e.originalEvent.stopPropagation();
-          setPopupInfo(station);
-        }}
-      />
-    ));
+    return filteredStations
+      .filter(
+        (station) =>
+          typeof station.location?.lng === 'number' &&
+          typeof station.location?.lat === 'number'
+      )
+      .map((station) => (
+        <Marker
+          key={station.id}
+          longitude={station.location.lng}
+          latitude={station.location.lat}
+          color={getMarkerColor(station.status)}
+          onClick={(e) => {
+            e.originalEvent.stopPropagation();
+            setPopupInfo(station);
+          }}
+        />
+      ));
   }, [filteredStations, getMarkerColor]);
 
   const arcgisUrl = useMemo(() => {

@@ -1,11 +1,13 @@
 'use client';
 
+import type { Station } from '@/types';
+
 interface StatusPillProps {
-  status: 'Normal' | 'Warning' | 'Danger' | 'Offline';
+  status: Station['status'] | string;
   size?: 'sm' | 'md';
 }
 
-const STATUS_STYLES: Record<StatusPillProps['status'], { wrapper: string; dot: string }> = {
+const STATUS_STYLES: Record<Station['status'], { wrapper: string; dot: string }> = {
   Normal: {
     wrapper: 'bg-emerald-500/15 border border-emerald-500/50 text-emerald-200',
     dot: 'bg-emerald-400',
@@ -32,6 +34,18 @@ const SIZE_CLASSES: Record<NonNullable<StatusPillProps['size']>, string> = {
 };
 
 export default function StatusPill({ status, size = 'md' }: StatusPillProps) {
+  const isKnownStatus = (value: string): value is Station['status'] =>
+    value === 'Normal' || value === 'Warning' || value === 'Danger' || value === 'Offline';
+
+  if (!isKnownStatus(status)) {
+    return (
+      <span className={`${BASE_CLASSES} ${SIZE_CLASSES[size]} bg-zinc-500/15 border border-zinc-700 text-zinc-200`}>
+        <span className="inline-flex h-1.5 w-1.5 rounded-full bg-zinc-400" />
+        {status || 'Unknown'}
+      </span>
+    );
+  }
+
   const styles = STATUS_STYLES[status];
 
   const dot = (

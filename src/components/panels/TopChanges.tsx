@@ -32,13 +32,24 @@ export default function TopChanges({ stations, onStationClick }: TopChangesProps
   // Create a derived change metric based on tab selection
   const { topRisers, topDroppers } = useMemo(() => {
     const metricFor = (s: Station) => {
-      if (tab === '1h') return s.lastReading.change1h;
-      if (tab === '24h') return s.lastReading.change24h;
-      return Number((s.lastReading.change24h * 2.6 + (Math.random() - 0.5) * 0.2).toFixed(2));
+      const reading = s.lastReading;
+      if (!reading) return 0;
+      const change1h = typeof reading.change1h === 'number' ? reading.change1h : 0;
+      const change24h = typeof reading.change24h === 'number' ? reading.change24h : 0;
+
+      if (tab === '1h') return change1h;
+      if (tab === '24h') return change24h;
+      return Number((change24h * 2.6 + (Math.random() - 0.5) * 0.2).toFixed(2));
+    };
+
+    const hasValidReading = (station: Station) => {
+      const { lastReading } = station;
+      if (!lastReading) return false;
+      return typeof lastReading.change1h === 'number' && typeof lastReading.change24h === 'number';
     };
 
     const ranked: RankedStation[] = stations
-      .filter(station => station.status !== 'Offline')
+      .filter(station => station.status !== 'Offline' && hasValidReading(station))
       .map(station => ({
         station,
         metric: metricFor(station),
@@ -119,7 +130,9 @@ export default function TopChanges({ stations, onStationClick }: TopChangesProps
                         </span>
                       </div>
                       <p className="text-[11px] text-zinc-500 mt-2">
-                        Level {station.station.lastReading.waterLevel.toFixed(2)} m
+                        Level {typeof station.station.lastReading?.waterLevel === 'number'
+                          ? station.station.lastReading.waterLevel.toFixed(2)
+                          : 'N/A'} m
                       </p>
                     </div>
                   </div>
