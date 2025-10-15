@@ -2,7 +2,7 @@
 
 import { Station } from '@/types';
 import { useMemo, useState } from 'react';
-import { TrendingUp, TrendingDown, MapPin } from 'lucide-react';
+import { TrendingUp, TrendingDown, MapPin, Shuffle } from 'lucide-react';
 
 interface TopChangesProps {
   stations: Station[];
@@ -11,7 +11,20 @@ interface TopChangesProps {
 
 export default function TopChanges({ stations, onStationClick }: TopChangesProps) {
   const [tab, setTab] = useState<'1h' | '24h' | '7d'>('24h');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'risers' | 'droppers'>('all');
 
+  const statusBadge = (status: Station['status']) => {
+    switch (status) {
+      case 'Normal':
+        return 'bg-emerald-500/10 border border-emerald-500/40 text-emerald-200';
+      case 'Warning':
+        return 'bg-amber-500/10 border border-amber-500/40 text-amber-200';
+      case 'Danger':
+        return 'bg-rose-500/10 border border-rose-500/40 text-rose-200';
+      default:
+        return 'bg-slate-500/10 border border-slate-500/40 text-slate-200';
+    }
+  };
   // Create a derived change metric based on tab selection
   const metricFor = (s: Station) => {
     if (tab === '1h') return s.lastReading.change1h;
@@ -52,9 +65,9 @@ export default function TopChanges({ stations, onStationClick }: TopChangesProps
     const { Icon } = accent;
     
     return (
-      <div className="space-y-3">
+      <div className="flex gap-3 overflow-x-auto pb-1 custom-scrollbar">
         {stationList.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-center">
+          <div className="flex flex-col items-center justify-center py-8 text-center min-w-[240px]">
             <div className="w-12 h-12 bg-zinc-950/40 border border-zinc-800 rounded-full grid place-items-center mb-3">
               <Icon size={20} className={accent.text} />
             </div>
@@ -65,7 +78,7 @@ export default function TopChanges({ stations, onStationClick }: TopChangesProps
           stationList.map((station, index) => (
             <div 
               key={station.id} 
-              className={`group bg-zinc-950/40 border border-zinc-800 rounded-2xl px-4 py-3 cursor-pointer transition-all duration-200 hover:bg-zinc-950/60 ${accent.hover}`}
+              className={`group bg-zinc-950/40 border border-zinc-800 rounded-2xl px-4 py-3 cursor-pointer transition-all duration-200 hover:bg-zinc-950/60 ${accent.hover} min-w-[250px]`}
               onClick={() => onStationClick && onStationClick(station)}
             >
               <div className="flex items-center gap-4">
@@ -81,22 +94,11 @@ export default function TopChanges({ stations, onStationClick }: TopChangesProps
                           {station.name}
                         </p>
                       </div>
-                      <div className="mt-1 flex items-center gap-2 flex-wrap text-[11px] text-zinc-500">
-                        <span className="truncate">{station.basin}</span>
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border border-zinc-700 bg-zinc-900/60 text-[10px] uppercase tracking-wide text-zinc-400">
-                          Status
-                          <span
-                            className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
-                              station.status === 'Normal'
-                                ? 'bg-emerald-500/10 border border-emerald-500/40 text-emerald-200'
-                                : station.status === 'Warning'
-                                ? 'bg-amber-500/10 border border-amber-500/40 text-amber-200'
-                                : 'bg-rose-500/10 border border-rose-500/40 text-rose-200'
-                            }`}
-                          >
-                            {station.status}
-                          </span>
+                      <div className="mt-2 flex items-center gap-2 flex-wrap text-[11px] text-zinc-500">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${statusBadge(station.status)}`}>
+                          {station.status}
                         </span>
+                        <span className="truncate">{station.basin}</span>
                       </div>
                     </div>
                     <div className="shrink-0 text-right">
@@ -120,6 +122,9 @@ export default function TopChanges({ stations, onStationClick }: TopChangesProps
     );
   };
 
+  const visibleCategories: Array<'risers' | 'droppers'> =
+    categoryFilter === 'all' ? ['risers', 'droppers'] : [categoryFilter];
+
   return (
     <div className="rounded-3xl bg-zinc-950/85 border border-zinc-900 shadow-xl h-full">
       <div className="px-5 py-4 border-b border-zinc-900">
@@ -127,20 +132,58 @@ export default function TopChanges({ stations, onStationClick }: TopChangesProps
           <TrendingUp size={18} className="text-sky-300" />
           Top Changes
         </h3>
-        <div className="mt-3 flex items-center gap-2">
-          {(['1h','24h','7d'] as const).map(key => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                tab===key
-                  ? 'bg-sky-500/15 border-sky-500/60 text-sky-200 shadow-[0_0_12px_rgba(56,189,248,0.35)]'
-                  : 'border-zinc-800 text-zinc-500 hover:text-zinc-200 hover:border-zinc-600'
-              }`}
-            >
-              {key}
-            </button>
-          ))}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2">
+            {(['1h','24h','7d'] as const).map(key => (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                  tab===key
+                    ? 'bg-sky-500/15 border-sky-500/60 text-sky-200 shadow-[0_0_12px_rgba(56,189,248,0.35)]'
+                    : 'border-zinc-800 text-zinc-500 hover:text-zinc-200 hover:border-zinc-600'
+                }`}
+              >
+                {key}
+              </button>
+            ))}
+          </div>
+          <div className="h-4 w-px bg-zinc-800 hidden sm:block" />
+          <div className="flex items-center gap-2 text-xs text-zinc-500">
+            <span className="uppercase tracking-wide text-[10px] text-zinc-500">Category</span>
+            {(['all','risers','droppers'] as const).map(option => (
+              <button
+                key={option}
+                onClick={() => setCategoryFilter(option)}
+                className={`px-3 py-1.5 rounded-full border transition-all ${
+                  categoryFilter === option
+                    ? option === 'all'
+                      ? 'bg-zinc-800 border-zinc-700 text-zinc-100 shadow-[0_0_12px_rgba(113,113,122,0.35)]'
+                      : option === 'risers'
+                      ? 'bg-rose-500/15 border-rose-500/40 text-rose-200 shadow-[0_0_12px_rgba(244,63,94,0.25)]'
+                      : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200 shadow-[0_0_12px_rgba(16,185,129,0.25)]'
+                    : 'border-zinc-800 text-zinc-500 hover:text-zinc-200 hover:border-zinc-600'
+                }`}
+              >
+                {option === 'all' ? (
+                  <span className="flex items-center gap-1">
+                    <Shuffle size={12} />
+                    All
+                  </span>
+                ) : option === 'risers' ? (
+                  <span className="flex items-center gap-1">
+                    <TrendingUp size={12} />
+                    Top Risers
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1">
+                    <TrendingDown size={12} />
+                    Top Droppers
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
         <p className="text-xs text-zinc-500 mt-2">
           Stations with highest level fluctuations ({tab})
@@ -148,21 +191,22 @@ export default function TopChanges({ stations, onStationClick }: TopChangesProps
       </div>
       
       <div className="p-5">
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <TrendingUp size={18} className="text-rose-300" />
-              <h4 className="text-sm font-semibold text-zinc-200">Top Risers</h4>
+        <div className="flex flex-col gap-5">
+          {visibleCategories.map(type => (
+            <div key={type} className="space-y-3">
+              <div className="flex items-center gap-2">
+                {type === 'risers' ? (
+                  <TrendingUp size={18} className="text-rose-300" />
+                ) : (
+                  <TrendingDown size={18} className="text-emerald-300" />
+                )}
+                <h4 className="text-sm font-semibold text-zinc-200">
+                  {type === 'risers' ? 'Top Risers' : 'Top Droppers'}
+                </h4>
+              </div>
+              {renderStationList(type === 'risers' ? topRisers : topDroppers, type)}
             </div>
-            {renderStationList(topRisers, 'risers')}
-          </div>
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <TrendingDown size={18} className="text-emerald-300" />
-              <h4 className="text-sm font-semibold text-zinc-200">Top Droppers</h4>
-            </div>
-            {renderStationList(topDroppers, 'droppers')}
-          </div>
+          ))}
         </div>
       </div>
     </div>
