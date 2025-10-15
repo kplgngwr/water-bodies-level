@@ -2,7 +2,7 @@
 
 import StatusPill from '@/components/ui/StatusPill';
 import { BasinSummary, Station } from '@/types';
-import { Activity, AlertTriangle, MapPin, Power, ShieldAlert } from 'lucide-react';
+import { Activity, MapPin, Power, ShieldAlert } from 'lucide-react';
 
 interface DevicesViewProps {
   stations: Station[];

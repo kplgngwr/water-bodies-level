@@ -2,7 +2,7 @@
 
 import React, { useMemo } from "react";
 import { Station } from "@/types";
-import { Card, TabGroup, TabList, Tab, TabPanels, TabPanel } from "@tremor/react";
+import { TabGroup, TabList, Tab, TabPanels, TabPanel } from "@tremor/react";
 import { Activity, Battery } from "lucide-react";
 
 interface HealthStatusProps {

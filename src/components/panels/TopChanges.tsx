@@ -44,8 +44,8 @@ export default function TopChanges({ stations, onStationClick }: TopChangesProps
       .slice(0, count);
   };
 
-  const topRisers = useMemo(() => getTopChanges('risers'), [stations, tab]);
-  const topDroppers = useMemo(() => getTopChanges('droppers'), [stations, tab]);
+  const topRisers = useMemo(() => getTopChanges('risers'), [stations, getTopChanges]);
+  const topDroppers = useMemo(() => getTopChanges('droppers'), [stations, getTopChanges]);
 
   const renderStationList = (stationList: Station[], type: 'risers' | 'droppers') => {
     const accent =

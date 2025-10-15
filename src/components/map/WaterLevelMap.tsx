@@ -96,7 +96,7 @@ export default function WaterLevelMap({
   const [waterBodiesError, setWaterBodiesError] = useState<string | null>(null);
   const [waterBodyPopup, setWaterBodyPopup] = useState<{
     coordinates: [number, number];
-    properties: Record<string, any>;
+    properties: Record<string, unknown>;
   } | null>(null);
 
   const mapRef = useRef<MapRef | null>(null);
@@ -256,8 +256,8 @@ export default function WaterLevelMap({
 
       const data = (await response.json()) as FeatureCollection;
       setWaterBodiesData(data);
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
+    } catch (error: unknown) {
+      if ((error as Error).name === 'AbortError') {
         return;
       }
       console.error('Failed to load water bodies', error);
@@ -300,7 +300,7 @@ export default function WaterLevelMap({
     }
   }, [showWaterBodiesActive]);
 
-  const formatArea = useCallback((properties: Record<string, any>) => {
+  const formatArea = useCallback((properties: Record<string, unknown>) => {
     const candidates = ['AREA_SQKM', 'Area_sqkm', 'area_sqkm', 'AREA', 'Shape_Area'];
     for (const key of candidates) {
       const raw = properties?.[key];
@@ -316,7 +316,7 @@ export default function WaterLevelMap({
     return null;
   }, []);
 
-  const resolveProperty = useCallback((properties: Record<string, any>, keys: string[], fallback = 'Unknown') => {
+  const resolveProperty = useCallback((properties: Record<string, unknown>, keys: string[], fallback = 'Unknown') => {
     for (const key of keys) {
       const value = properties?.[key];
       if (typeof value === 'string' && value.trim().length > 0) {
