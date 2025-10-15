@@ -19,6 +19,7 @@ export default function Home() {
   const [basins, setBasins] = useState<BasinSummaryType[]>([]);
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [route, setRoute] = useState<'/' | '/map' | '/analytics' | '/alerts' | '/devices' | '/quality' | '/reports' | '/settings'>('/');
   
   // New state for filters
   const [regionFilter, setRegionFilter] = useState<string>('All');
@@ -45,7 +46,8 @@ export default function Home() {
         setLoading(false);
       }
     };
-
+    // Invoke the data loader (was previously defined but never called)
+    loadData();
   }, []);
 
   const handleAlertAcknowledge = (alertId: string) => {
@@ -58,7 +60,7 @@ export default function Home() {
     return (
       <div className="min-h-screen bg-zinc-950">
         <div className="flex">
-          <Sidebar />
+          <Sidebar current={route} onNavigate={(href) => setRoute(href as typeof route)} />
           <main className="flex-1 min-w-0">
             <Topbar />
             <div className="flex flex-col items-center justify-center h-[calc(100vh-3.5rem)]">
@@ -74,54 +76,110 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="flex">
-        <Sidebar />
+  <Sidebar current={route} onNavigate={(href) => setRoute(href as typeof route)} />
         <main className="flex-1 min-w-0">
           <Topbar />
-          
           <div className="p-4 md:p-6 space-y-6">
-            {/* KPI Dashboard - Top Row */}
-            <section>
-              <KpiDashboard systemStatus={systemStatus} />
-            </section>
+            {route === '/' && (
+              <>
+                <section>
+                  <KpiDashboard systemStatus={systemStatus} />
+                </section>
+                <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                  <div className="xl:col-span-2">
+                    <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 overflow-hidden shadow-lg">
+                      <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+                        <div>
+                          <h3 className="font-medium">Live Station Map</h3>
+                          <p className="text-xs text-zinc-500 mt-0.5">Real-time monitoring locations</p>
+                        </div>
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-950/30 border border-emerald-800/50 rounded-lg">
+                          <div className="w-2 h-2 bg-emerald-500 rounded-full pulse-glow"></div>
+                          <span className="text-xs font-medium text-emerald-400">Live</span>
+                        </div>
+                      </div>
+                      <div className="p-4">
+                        <WaterLevelMap stations={stations} />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <AlertTicker alerts={alerts} onAcknowledge={handleAlertAcknowledge} />
+                    <TopChanges stations={stations} />
+                  </div>
+                </section>
+                <section className="grid grid-cols-1 xl:grid-cols-4 gap-4">
+                  <div className="xl:col-span-2">
+                    <BasinSummary basins={basins} />
+                  </div>
+                  {/* Spacer column to match the right-side TopChanges width and avoid overlap */}
+                  <div className="hidden xl:block" />
+                </section>
+                <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <HealthStatus stations={stations} />
+                  <SlaStatus basins={basins} />
+                </section>
+              </>
+            )}
 
-            {/* Main Grid - Map + Panels */}
-            <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-              {/* Hero Map - 2/3 width */}
-              <div className="xl:col-span-2">
+            {route === '/map' && (
+              <section className="grid grid-cols-1 gap-4">
                 <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 overflow-hidden shadow-lg">
-                  <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
-                    <div>
-                      <h3 className="font-medium">Live Station Map</h3>
-                      <p className="text-xs text-zinc-500 mt-0.5">Real-time monitoring locations</p>
-                    </div>
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-950/30 border border-emerald-800/50 rounded-lg">
-                      <div className="w-2 h-2 bg-emerald-500 rounded-full pulse-glow"></div>
-                      <span className="text-xs font-medium text-emerald-400">Live</span>
-                    </div>
+                  <div className="px-4 py-3 border-b border-zinc-800">
+                    <h3 className="font-medium">Map Explorer</h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">Filterable and interactive map</p>
                   </div>
                   <div className="p-4">
                     <WaterLevelMap stations={stations} />
                   </div>
                 </div>
-              </div>
+              </section>
+            )}
 
-              {/* Right Sidebar Panels - 1/3 width */}
-              <div className="space-y-4">
+            {route === '/analytics' && (
+              <section>
+                <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 overflow-hidden shadow-lg p-6 text-sm text-zinc-400">
+                  Analytics coming soon (mock)
+                </div>
+              </section>
+            )}
+
+            {route === '/alerts' && (
+              <section>
                 <AlertTicker alerts={alerts} onAcknowledge={handleAlertAcknowledge} />
-                <TopChanges stations={stations} />
-              </div>
-            </section>
+              </section>
+            )}
 
-            {/* Basin Summary - Full Width */}
-            <section>
-              <BasinSummary basins={basins} />
-            </section>
+            {route === '/devices' && (
+              <section>
+                <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 overflow-hidden shadow-lg p-6 text-sm text-zinc-400">
+                  Device operations coming soon (mock)
+                </div>
+              </section>
+            )}
 
-            {/* Health & SLA Status */}
-            <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <HealthStatus stations={stations} />
-              <SlaStatus basins={basins} />
-            </section>
+            {route === '/quality' && (
+              <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <HealthStatus stations={stations} />
+                <SlaStatus basins={basins} />
+              </section>
+            )}
+
+            {route === '/reports' && (
+              <section>
+                <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 overflow-hidden shadow-lg p-6 text-sm text-zinc-400">
+                  Reports and exports coming soon (mock)
+                </div>
+              </section>
+            )}
+
+            {route === '/settings' && (
+              <section>
+                <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 overflow-hidden shadow-lg p-6 text-sm text-zinc-400">
+                  Settings coming soon (mock)
+                </div>
+              </section>
+            )}
           </div>
 
           {/* Footer */}

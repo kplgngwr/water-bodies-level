@@ -2,8 +2,8 @@
 
 import { Alert } from '@/types';
 import { acknowledgeAlert } from '@/lib/api';
-import { Card, List, ListItem, Text, Title } from '@tremor/react';
 import { useState } from 'react';
+import { AlertTriangle, CheckCircle, XCircle, Radio } from 'lucide-react';
 
 interface AlertTickerProps {
   alerts: Alert[];
@@ -31,38 +31,38 @@ export default function AlertTicker({ alerts, onAcknowledge }: AlertTickerProps)
     switch (type) {
       case 'Warning': 
         return {
-          bgColor: 'bg-yellow-50',
-          borderColor: 'border-l-yellow-500',
-          textColor: 'text-yellow-700',
-          iconBg: 'bg-yellow-100'
+          bg: 'bg-amber-950/30',
+          border: 'border-amber-800/50',
+          text: 'text-amber-400',
+          icon: <AlertTriangle size={16} className="text-amber-400" />
         };
       case 'Danger': 
         return {
-          bgColor: 'bg-red-50',
-          borderColor: 'border-l-red-500',
-          textColor: 'text-red-700',
-          iconBg: 'bg-red-100'
+          bg: 'bg-rose-950/30',
+          border: 'border-rose-800/50',
+          text: 'text-rose-400',
+          icon: <XCircle size={16} className="text-rose-400" />
         };
       case 'Offline': 
         return {
-          bgColor: 'bg-gray-50',
-          borderColor: 'border-l-gray-500',
-          textColor: 'text-gray-700',
-          iconBg: 'bg-gray-100'
+          bg: 'bg-zinc-950/30',
+          border: 'border-zinc-700/50',
+          text: 'text-zinc-400',
+          icon: <Radio size={16} className="text-zinc-400" />
         };
       case 'Recovery': 
         return {
-          bgColor: 'bg-green-50',
-          borderColor: 'border-l-green-500',
-          textColor: 'text-green-700',
-          iconBg: 'bg-green-100'
+          bg: 'bg-emerald-950/30',
+          border: 'border-emerald-800/50',
+          text: 'text-emerald-400',
+          icon: <CheckCircle size={16} className="text-emerald-400" />
         };
       default: 
         return {
-          bgColor: 'bg-blue-50',
-          borderColor: 'border-l-blue-500',
-          textColor: 'text-blue-700',
-          iconBg: 'bg-blue-100'
+          bg: 'bg-sky-950/30',
+          border: 'border-sky-800/50',
+          text: 'text-sky-400',
+          icon: <AlertTriangle size={16} className="text-sky-400" />
         };
     }
   };
@@ -80,66 +80,68 @@ export default function AlertTicker({ alerts, onAcknowledge }: AlertTickerProps)
   };
 
   return (
-    <Card className="shadow-lg border-2 border-white h-full">
-      <div className="flex items-center justify-between mb-4">
+    <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 overflow-hidden shadow-lg h-full">
+      <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
         <div>
-          <Title className="text-slate-800">Recent Alerts</Title>
-          <p className="text-xs text-slate-500 mt-1">{alerts.length} active alerts</p>
+          <h3 className="font-medium flex items-center gap-2">
+            <AlertTriangle size={18} className="text-sky-400" />
+            Recent Alerts
+          </h3>
+          <p className="text-xs text-zinc-500 mt-1">{alerts.length} active alert{alerts.length !== 1 ? 's' : ''}</p>
         </div>
         {alerts.length > 0 && (
-          <div className="px-2 py-1 bg-red-100 rounded-full">
-            <span className="text-xs font-semibold text-red-700">{alerts.length}</span>
+          <div className="px-2.5 py-1 bg-rose-950/50 border border-rose-800/50 rounded-full">
+            <span className="text-xs font-semibold text-rose-400">{alerts.length}</span>
           </div>
         )}
       </div>
-      {alerts.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-8">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-3">
-            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+      
+      <div className="p-4">
+        {alerts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8">
+            <div className="w-16 h-16 bg-emerald-950/30 border border-emerald-800/30 rounded-full flex items-center justify-center mb-3">
+              <CheckCircle size={32} className="text-emerald-400" />
+            </div>
+            <p className="text-zinc-300 font-medium">All Clear</p>
+            <p className="text-xs text-zinc-500 mt-1">No recent alerts</p>
           </div>
-          <Text className="text-slate-600 font-medium">All Clear</Text>
-          <Text className="text-xs text-slate-500">No recent alerts</Text>
-        </div>
-      ) : (
-        <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
-          {alerts.map((alert) => {
-            const styles = getAlertStyles(alert.type);
-            return (
-              <div 
-                key={alert.id} 
-                className={`${styles.bgColor} ${styles.borderColor} border-l-4 rounded-r-lg p-3 transition-all hover:shadow-md`}
-              >
-                <div className="flex justify-between items-start gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${styles.textColor} ${styles.iconBg}`}>
-                        {alert.type}
-                      </span>
-                      <span className="text-xs text-slate-500">{formatTime(alert.timestamp)}</span>
+        ) : (
+          <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar pr-1">
+            {alerts.map((alert) => {
+              const styles = getAlertStyles(alert.type);
+              return (
+                <div 
+                  key={alert.id} 
+                  className={`${styles.bg} border ${styles.border} border-l-4 rounded-xl p-3 transition-all hover:scale-102`}
+                >
+                  <div className="flex justify-between items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2">
+                        {styles.icon}
+                        <span className={`px-2 py-0.5 rounded-md text-xs font-semibold ${styles.text}`}>
+                          {alert.type}
+                        </span>
+                        <span className="text-xs text-zinc-500">{formatTime(alert.timestamp)}</span>
+                      </div>
+                      <p className="font-semibold text-sm text-zinc-200 truncate">{alert.stationName}</p>
+                      <p className="text-xs text-zinc-400 mt-1 line-clamp-2">{alert.message}</p>
                     </div>
-                    <Text className="font-semibold text-sm text-slate-800">{alert.stationName}</Text>
-                    <Text className="text-xs text-slate-600 mt-1">{alert.message}</Text>
+                    {!alert.acknowledged && onAcknowledge && (
+                      <button
+                        className="shrink-0 px-3 py-1.5 text-xs border border-zinc-700 text-zinc-300 rounded-lg hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                        onClick={() => handleAcknowledge(alert.id)}
+                        disabled={acknowledging === alert.id}
+                      >
+                        {acknowledging === alert.id ? 'ACK...' : 'ACK'}
+                      </button>
+                    )}
                   </div>
-                  {!alert.acknowledged && onAcknowledge && (
-                    <button
-                      className="px-3 py-1.5 text-xs border border-slate-300 text-slate-700 rounded-md hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium whitespace-nowrap"
-                      onClick={() => {
-                        console.log('Acknowledging alert:', alert.id);
-                        handleAcknowledge(alert.id);
-                      }}
-                      disabled={acknowledging === alert.id}
-                    >
-                      {acknowledging === alert.id ? 'Processing...' : 'Acknowledge'}
-                    </button>
-                  )}
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </Card>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
