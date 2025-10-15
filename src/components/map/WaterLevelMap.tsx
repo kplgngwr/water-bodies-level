@@ -179,8 +179,13 @@ export default function WaterLevelMap({
   const updateBoundsFromMap = useCallback(() => {
     if (!mapReadyRef.current) return;
     const mapInstance = mapRef.current?.getMap();
-    if (!mapInstance) return;
+    if (!mapInstance || typeof mapInstance.getBounds !== 'function') {
+      return;
+    }
     const bounds = mapInstance.getBounds();
+    if (!bounds) {
+      return;
+    }
     setMapBounds({
       west: bounds.getWest(),
       south: bounds.getSouth(),
