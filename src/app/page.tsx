@@ -1,17 +1,28 @@
 'use client';
 
-import KpiDashboard from '@/components/kpi/KpiDashboard';
-import BasinSummary from '@/components/kpi/BasinSummary';
-import WaterLevelMap from '@/components/map/WaterLevelMap';
-import AlertTicker from '@/components/panels/AlertTicker';
-import HealthStatus from '@/components/panels/HealthStatus';
-import SlaStatus from '@/components/panels/SlaStatus';
-import TopChanges from '@/components/panels/TopChanges';
 import Sidebar from '@/components/layout/Sidebar';
 import Topbar from '@/components/layout/Topbar';
+import AnalyticsView from '@/components/views/AnalyticsView';
+import AlertsView from '@/components/views/AlertsView';
+import DashboardView from '@/components/views/DashboardView';
+import DevicesView from '@/components/views/DevicesView';
+import MapView from '@/components/views/MapView';
+import QualityView from '@/components/views/QualityView';
+import ReportsView from '@/components/views/ReportsView';
+import SettingsView from '@/components/views/SettingsView';
 import { fetchAlerts, fetchBasinSummaries, fetchStations, fetchSystemStatus } from '@/lib/api';
 import { Alert, BasinSummary as BasinSummaryType, Station, SystemStatus } from '@/types';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+
+type Route =
+  | '/'
+  | '/map'
+  | '/analytics'
+  | '/alerts'
+  | '/devices'
+  | '/quality'
+  | '/reports'
+  | '/settings';
 
 export default function Home() {
   const [stations, setStations] = useState<Station[]>([]);
@@ -19,11 +30,9 @@ export default function Home() {
   const [basins, setBasins] = useState<BasinSummaryType[]>([]);
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [route, setRoute] = useState<'/' | '/map' | '/analytics' | '/alerts' | '/devices' | '/quality' | '/reports' | '/settings'>('/');
-  
-  // New state for filters
+  const [route, setRoute] = useState<Route>('/');
   const [regionFilter, setRegionFilter] = useState<string>('All');
-  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
+  const [statusFilter, setStatusFilter] = useState<Set<Station['status']>>(() => new Set());
 
   useEffect(() => {
     const loadData = async () => {
@@ -33,7 +42,7 @@ export default function Home() {
           fetchStations(),
           fetchAlerts(),
           fetchBasinSummaries(),
-          fetchSystemStatus()
+          fetchSystemStatus(),
         ]);
 
         setStations(stationsData);
@@ -46,26 +55,91 @@ export default function Home() {
         setLoading(false);
       }
     };
-    // Invoke the data loader (was previously defined but never called)
+
     loadData();
   }, []);
 
-  const handleAlertAcknowledge = (alertId: string) => {
-    setAlerts(prevAlerts => 
-      prevAlerts.filter(alert => alert.id !== alertId)
-    );
-  };
+  const handleAlertAcknowledge = useCallback((alertId: string) => {
+    setAlerts((prevAlerts) => prevAlerts.filter((alert) => alert.id !== alertId));
+  }, []);
+
+  const handleStatusFilterToggle = useCallback((status: Station['status']) => {
+    setStatusFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) {
+        next.delete(status);
+      } else {
+        next.add(status);
+      }
+      return next;
+    });
+  }, []);
+
+  const routeContent = useMemo(() => {
+    if (!systemStatus) return null;
+
+    switch (route) {
+      case '/':
+        return (
+          <DashboardView
+            stations={stations}
+            alerts={alerts}
+            basins={basins}
+            systemStatus={systemStatus}
+            regionFilter={regionFilter}
+            statusFilter={statusFilter}
+            onRegionFilterChange={setRegionFilter}
+            onStatusFilterToggle={handleStatusFilterToggle}
+            onAlertAcknowledge={handleAlertAcknowledge}
+          />
+        );
+      case '/map':
+        return (
+          <MapView
+            stations={stations}
+            regionFilter={regionFilter}
+            statusFilter={statusFilter}
+            onRegionFilterChange={setRegionFilter}
+            onStatusFilterToggle={handleStatusFilterToggle}
+          />
+        );
+      case '/analytics':
+        return <AnalyticsView stations={stations} basins={basins} />;
+      case '/alerts':
+        return <AlertsView alerts={alerts} onAlertAcknowledge={handleAlertAcknowledge} />;
+      case '/devices':
+        return <DevicesView stations={stations} basins={basins} />;
+      case '/quality':
+        return <QualityView stations={stations} basins={basins} />;
+      case '/reports':
+        return <ReportsView basins={basins} />;
+      case '/settings':
+        return systemStatus ? <SettingsView systemStatus={systemStatus} /> : null;
+      default:
+        return null;
+    }
+  }, [
+    alerts,
+    basins,
+    regionFilter,
+    route,
+    stations,
+    statusFilter,
+    systemStatus,
+    handleAlertAcknowledge,
+    handleStatusFilterToggle,
+  ]);
 
   if (loading || !systemStatus) {
     return (
       <div className="min-h-screen bg-zinc-950">
         <div className="flex">
-          <Sidebar current={route} onNavigate={(href) => setRoute(href as typeof route)} />
+          <Sidebar current={route} onNavigate={(href) => setRoute(href as Route)} />
           <main className="flex-1 min-w-0">
             <Topbar />
             <div className="flex flex-col items-center justify-center h-[calc(100vh-3.5rem)]">
               <div className="animate-spin rounded-full h-16 w-16 border-4 border-sky-500 border-t-transparent"></div>
-              <p className="mt-4 text-zinc-400 font-medium">Loading Dashboard...</p>
+              <p className="mt-4 text-zinc-400 font-medium">Loading dashboard...</p>
             </div>
           </main>
         </div>
@@ -76,117 +150,15 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="flex">
-  <Sidebar current={route} onNavigate={(href) => setRoute(href as typeof route)} />
+        <Sidebar current={route} onNavigate={(href) => setRoute(href as Route)} />
         <main className="flex-1 min-w-0">
           <Topbar />
-          <div className="p-4 md:p-6 space-y-6">
-            {route === '/' && (
-              <>
-                <section>
-                  <KpiDashboard systemStatus={systemStatus} />
-                </section>
-                <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                  <div className="xl:col-span-2">
-                    <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 overflow-hidden shadow-lg">
-                      <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
-                        <div>
-                          <h3 className="font-medium">Live Station Map</h3>
-                          <p className="text-xs text-zinc-500 mt-0.5">Real-time monitoring locations</p>
-                        </div>
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-950/30 border border-emerald-800/50 rounded-lg">
-                          <div className="w-2 h-2 bg-emerald-500 rounded-full pulse-glow"></div>
-                          <span className="text-xs font-medium text-emerald-400">Live</span>
-                        </div>
-                      </div>
-                      <div className="p-4">
-                        <WaterLevelMap stations={stations} />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    <AlertTicker alerts={alerts} onAcknowledge={handleAlertAcknowledge} />
-                    <TopChanges stations={stations} />
-                  </div>
-                </section>
-                <section className="grid grid-cols-1 xl:grid-cols-4 gap-4">
-                  <div className="xl:col-span-2">
-                    <BasinSummary basins={basins} />
-                  </div>
-                  {/* Spacer column to match the right-side TopChanges width and avoid overlap */}
-                  <div className="hidden xl:block" />
-                </section>
-                <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <HealthStatus stations={stations} />
-                  <SlaStatus basins={basins} />
-                </section>
-              </>
-            )}
+          <div className="p-4 md:p-6 space-y-6">{routeContent}</div>
 
-            {route === '/map' && (
-              <section className="grid grid-cols-1 gap-4">
-                <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 overflow-hidden shadow-lg">
-                  <div className="px-4 py-3 border-b border-zinc-800">
-                    <h3 className="font-medium">Map Explorer</h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">Filterable and interactive map</p>
-                  </div>
-                  <div className="p-4">
-                    <WaterLevelMap stations={stations} />
-                  </div>
-                </div>
-              </section>
-            )}
-
-            {route === '/analytics' && (
-              <section>
-                <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 overflow-hidden shadow-lg p-6 text-sm text-zinc-400">
-                  Analytics coming soon (mock)
-                </div>
-              </section>
-            )}
-
-            {route === '/alerts' && (
-              <section>
-                <AlertTicker alerts={alerts} onAcknowledge={handleAlertAcknowledge} />
-              </section>
-            )}
-
-            {route === '/devices' && (
-              <section>
-                <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 overflow-hidden shadow-lg p-6 text-sm text-zinc-400">
-                  Device operations coming soon (mock)
-                </div>
-              </section>
-            )}
-
-            {route === '/quality' && (
-              <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <HealthStatus stations={stations} />
-                <SlaStatus basins={basins} />
-              </section>
-            )}
-
-            {route === '/reports' && (
-              <section>
-                <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 overflow-hidden shadow-lg p-6 text-sm text-zinc-400">
-                  Reports and exports coming soon (mock)
-                </div>
-              </section>
-            )}
-
-            {route === '/settings' && (
-              <section>
-                <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 overflow-hidden shadow-lg p-6 text-sm text-zinc-400">
-                  Settings coming soon (mock)
-                </div>
-              </section>
-            )}
-          </div>
-
-          {/* Footer */}
           <footer className="mt-8 border-t border-zinc-800 bg-zinc-900/50">
             <div className="px-6 py-4">
               <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-zinc-500">
-                <p>© 2025 Water Bodies Monitoring • Central Intelligence Portal</p>
+                <p>(c) 2025 Water Bodies Monitoring - Central Intelligence Portal</p>
                 <p className="flex items-center gap-2">
                   <span className="w-2 h-2 bg-sky-500 rounded-full"></span>
                   Last updated: {new Date().toLocaleTimeString()}

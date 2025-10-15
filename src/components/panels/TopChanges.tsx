@@ -35,58 +35,82 @@ export default function TopChanges({ stations, onStationClick }: TopChangesProps
   const topDroppers = useMemo(() => getTopChanges('droppers'), [stations, tab]);
 
   const renderStationList = (stationList: Station[], type: 'risers' | 'droppers') => {
-    const Icon = type === 'risers' ? TrendingUp : TrendingDown;
-    const colorClass = type === 'risers' ? 'text-rose-400' : 'text-emerald-400';
+    const accent =
+      type === 'risers'
+        ? {
+            Icon: TrendingUp,
+            text: 'text-rose-300',
+            chip: 'bg-rose-500/10 border border-rose-500/40 text-rose-200',
+            hover: 'hover:border-rose-500/40 hover:shadow-[0_0_18px_rgba(244,63,94,0.18)]',
+          }
+        : {
+            Icon: TrendingDown,
+            text: 'text-emerald-300',
+            chip: 'bg-emerald-500/10 border border-emerald-500/40 text-emerald-200',
+            hover: 'hover:border-emerald-500/40 hover:shadow-[0_0_18px_rgba(16,185,129,0.18)]',
+          };
+    const { Icon } = accent;
     
     return (
-      <div className="space-y-2">
+      <div className="space-y-3">
         {stationList.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8">
-            <div className="w-12 h-12 bg-zinc-950/30 border border-zinc-800 rounded-full flex items-center justify-center mb-2">
-              <Icon size={24} className="text-zinc-500" />
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <div className="w-12 h-12 bg-zinc-950/40 border border-zinc-800 rounded-full grid place-items-center mb-3">
+              <Icon size={20} className={accent.text} />
             </div>
-            <p className="text-sm text-zinc-500">No data available</p>
+            <p className="text-sm text-zinc-500">No stations available</p>
+            <p className="text-xs text-zinc-600 mt-1">Awaiting telemetry for this window</p>
           </div>
         ) : (
           stationList.map((station, index) => (
             <div 
               key={station.id} 
-              className="group bg-zinc-950/30 border border-zinc-800 hover:border-zinc-700 rounded-xl p-3 cursor-pointer transition-all hover:scale-102"
+              className={`group bg-zinc-950/40 border border-zinc-800 rounded-2xl px-4 py-3 cursor-pointer transition-all duration-200 hover:bg-zinc-950/60 ${accent.hover}`}
               onClick={() => onStationClick && onStationClick(station)}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className="shrink-0 flex items-center justify-center w-7 h-7 rounded-lg bg-sky-950/50 border border-sky-800/30 text-sky-400 font-bold text-xs">
-                    {index + 1}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <MapPin size={14} className="text-zinc-500 shrink-0" />
-                      <p className="font-medium text-sm text-zinc-200 group-hover:text-sky-400 transition-colors truncate">
-                        {station.name}
+              <div className="flex items-center gap-4">
+                <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-200 font-semibold text-sm">
+                  {index + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <MapPin size={13} className="text-zinc-500 shrink-0" />
+                        <p className="font-semibold text-sm text-zinc-100 truncate group-hover:text-sky-200 transition-colors">
+                          {station.name}
+                        </p>
+                      </div>
+                      <div className="mt-1 flex items-center gap-2 flex-wrap text-[11px] text-zinc-500">
+                        <span className="truncate">{station.basin}</span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border border-zinc-700 bg-zinc-900/60 text-[10px] uppercase tracking-wide text-zinc-400">
+                          Status
+                          <span
+                            className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                              station.status === 'Normal'
+                                ? 'bg-emerald-500/10 border border-emerald-500/40 text-emerald-200'
+                                : station.status === 'Warning'
+                                ? 'bg-amber-500/10 border border-amber-500/40 text-amber-200'
+                                : 'bg-rose-500/10 border border-rose-500/40 text-rose-200'
+                            }`}
+                          >
+                            {station.status}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${accent.chip}`}>
+                        <Icon size={16} className={accent.text} />
+                        <span className={`text-sm font-semibold ${accent.text}`}>
+                          {Math.abs(metricFor(station)).toFixed(2)} m
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-zinc-500 mt-2">
+                        Level {station.lastReading.waterLevel.toFixed(2)} m
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <p className="text-xs text-zinc-500 truncate">{station.basin}</p>
-                      <span className={`shrink-0 px-1.5 py-0.5 rounded text-xs font-medium ${
-                        station.status === 'Normal' ? 'bg-emerald-950/30 border border-emerald-800/30 text-emerald-400' :
-                        station.status === 'Warning' ? 'bg-amber-950/30 border border-amber-800/30 text-amber-400' :
-                        station.status === 'Danger' ? 'bg-rose-950/30 border border-rose-800/30 text-rose-400' : 
-                        'bg-zinc-950/30 border border-zinc-700 text-zinc-400'
-                      }`}>
-                        {station.status}
-                      </span>
-                    </div>
                   </div>
-                </div>
-                <div className="shrink-0 flex flex-col items-end ml-3">
-                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900/50 border border-zinc-800">
-                    <Icon size={16} className={colorClass} />
-                    <span className={`text-sm font-bold ${colorClass}`}>
-                      {Math.abs(metricFor(station)).toFixed(2)} m
-                    </span>
-                  </div>
-                  <p className="text-xs text-zinc-500 mt-1">{station.lastReading.waterLevel.toFixed(2)}m</p>
                 </div>
               </div>
             </div>
@@ -97,43 +121,45 @@ export default function TopChanges({ stations, onStationClick }: TopChangesProps
   };
 
   return (
-    <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 overflow-hidden shadow-lg h-full">
-      <div className="px-4 py-3 border-b border-zinc-800">
-        <h3 className="font-medium flex items-center gap-2">
-          <TrendingUp size={18} className="text-sky-400" />
+    <div className="rounded-3xl bg-zinc-950/85 border border-zinc-900 shadow-xl h-full">
+      <div className="px-5 py-4 border-b border-zinc-900">
+        <h3 className="font-semibold flex items-center gap-2 text-zinc-100">
+          <TrendingUp size={18} className="text-sky-300" />
           Top Changes
         </h3>
-        <div className="mt-2 flex items-center gap-2">
+        <div className="mt-3 flex items-center gap-2">
           {(['1h','24h','7d'] as const).map(key => (
             <button
               key={key}
               onClick={() => setTab(key)}
-              className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
+              className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
                 tab===key
-                  ? 'border-sky-500 text-sky-400 bg-sky-950/30'
-                  : 'border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                  ? 'bg-sky-500/15 border-sky-500/60 text-sky-200 shadow-[0_0_12px_rgba(56,189,248,0.35)]'
+                  : 'border-zinc-800 text-zinc-500 hover:text-zinc-200 hover:border-zinc-600'
               }`}
             >
               {key}
             </button>
           ))}
         </div>
-        <p className="text-xs text-zinc-500 mt-2">Stations with highest level fluctuations ({tab})</p>
+        <p className="text-xs text-zinc-500 mt-2">
+          Stations with highest level fluctuations ({tab})
+        </p>
       </div>
       
-      <div className="p-4">
-        <div className="grid grid-cols-2 gap-4">
+      <div className="p-5">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-3">
-              <TrendingUp size={16} className="text-rose-400" />
-              <h4 className="text-sm font-semibold text-zinc-300">Top Risers</h4>
+            <div className="flex items-center gap-2 mb-4">
+              <TrendingUp size={18} className="text-rose-300" />
+              <h4 className="text-sm font-semibold text-zinc-200">Top Risers</h4>
             </div>
             {renderStationList(topRisers, 'risers')}
           </div>
           <div>
-            <div className="flex items-center gap-2 mb-3">
-              <TrendingDown size={16} className="text-emerald-400" />
-              <h4 className="text-sm font-semibold text-zinc-300">Top Droppers</h4>
+            <div className="flex items-center gap-2 mb-4">
+              <TrendingDown size={18} className="text-emerald-300" />
+              <h4 className="text-sm font-semibold text-zinc-200">Top Droppers</h4>
             </div>
             {renderStationList(topDroppers, 'droppers')}
           </div>

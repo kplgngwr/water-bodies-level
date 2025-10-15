@@ -1,7 +1,7 @@
 'use client';
 
 import { Station } from '@/types';
-import { Card, Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow, Title } from '@tremor/react';
+import { Activity, Clock3, MapPin } from 'lucide-react';
 import StatusPill from '../ui/StatusPill';
 
 interface LatestStationsProps {
@@ -24,52 +24,74 @@ export default function LatestStations({ stations, limit = 3 }: LatestStationsPr
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  const renderLevelChange = (value: number) => {
+    if (value === 0) {
+      return <span className="text-[11px] text-zinc-400">0.00 m</span>;
+    }
+    const positive = value > 0;
+    return (
+      <span className={`text-[11px] font-semibold ${positive ? 'text-rose-300' : 'text-emerald-300'}`}>
+        {positive ? '+' : ''}{value.toFixed(2)} m
+      </span>
+    );
+  };
+
   return (
-    <Card className="shadow-lg border-2 border-white h-full">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <Title className="text-slate-800">Latest Stations</Title>
-          <p className="text-xs text-slate-500 mt-1">Most recently updated stations</p>
+    <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 overflow-hidden shadow-lg h-full">
+      <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 rounded-xl bg-sky-500/20 border border-sky-500/30 text-sky-300 flex items-center justify-center">
+            <Activity size={16} />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-100">Latest Stations</h3>
+            <p className="text-xs text-zinc-500">Most recent telemetry updates</p>
+          </div>
         </div>
+        <span className="text-[11px] text-zinc-500 uppercase tracking-wide">
+          {latestStations.length} entries
+        </span>
       </div>
 
-      <Table className="mt-2">
-        <TableHead>
-          <TableRow>
-            <TableHeaderCell className="text-xs">Station</TableHeaderCell>
-            <TableHeaderCell className="text-xs">Basin</TableHeaderCell>
-            <TableHeaderCell className="text-xs">Level</TableHeaderCell>
-            <TableHeaderCell className="text-xs">Time</TableHeaderCell>
-            <TableHeaderCell className="text-xs">Status</TableHeaderCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {latestStations.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={5} className="text-center py-4">
-                <p className="text-sm text-slate-500">No station data available</p>
-              </TableCell>
-            </TableRow>
-          ) : (
-            latestStations.map((station) => (
-              <TableRow key={station.id}>
-                <TableCell className="font-medium text-sm">{station.name}</TableCell>
-                <TableCell className="text-xs text-slate-600">{station.basin}</TableCell>
-                <TableCell className="text-xs">
-                  <span className="font-medium">{station.lastReading.waterLevel} m</span>
-                  <span className={`ml-1 text-xs ${station.lastReading.change1h > 0 ? 'text-red-500' : station.lastReading.change1h < 0 ? 'text-green-500' : 'text-slate-500'}`}>
-                    ({station.lastReading.change1h > 0 ? '+' : ''}{station.lastReading.change1h} m)
-                  </span>
-                </TableCell>
-                <TableCell className="text-xs text-slate-600">{formatTime(station.lastReading.timestamp)}</TableCell>
-                <TableCell>
-                  <StatusPill status={station.status} size="sm" />
-                </TableCell>
-              </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
-    </Card>
+      <div className="divide-y divide-zinc-800/70">
+        {latestStations.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 gap-2 text-zinc-500">
+            <Clock3 size={32} className="text-zinc-600" />
+            <p className="text-sm">No station data available</p>
+          </div>
+        ) : (
+          latestStations.map((station) => (
+            <div key={station.id} className="px-4 py-3 hover:bg-zinc-900/80 transition-colors">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-semibold text-zinc-200 truncate">
+                      {station.name}
+                    </h4>
+                    <StatusPill status={station.status} size="sm" />
+                  </div>
+                  <div className="mt-2 flex items-center gap-3 text-[11px] text-zinc-500 flex-wrap">
+                    <span className="flex items-center gap-1">
+                      <MapPin size={12} />
+                      {station.basin}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Clock3 size={12} />
+                      {formatTime(station.lastReading.timestamp)}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-bold text-zinc-100">
+                    {station.lastReading.waterLevel.toFixed(2)} m
+                  </p>
+                  <p>{renderLevelChange(station.lastReading.change1h)}</p>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
   );
 }
