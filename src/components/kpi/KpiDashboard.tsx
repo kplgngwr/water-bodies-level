@@ -2,7 +2,7 @@
 
 import { SystemStatus } from '@/types';
 import StatusCard from './StatusCard';
-import { Activity, AlertTriangle, Bell, Database, WifiOff, TrendingUp } from 'lucide-react';
+import { Activity, AlertTriangle, Bell, Database, WifiOff } from 'lucide-react';
 
 interface KpiDashboardProps {
   systemStatus: SystemStatus;

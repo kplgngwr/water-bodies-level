@@ -12,6 +12,10 @@ interface TopChangesProps {
 export default function TopChanges({ stations, onStationClick }: TopChangesProps) {
   const [tab, setTab] = useState<'1h' | '24h' | '7d'>('24h');
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'risers' | 'droppers'>('all');
+  interface RankedStation {
+    station: Station;
+    metric: number;
+  }
 
   const statusBadge = (status: Station['status']) => {
     switch (status) {
@@ -26,28 +30,34 @@ export default function TopChanges({ stations, onStationClick }: TopChangesProps
     }
   };
   // Create a derived change metric based on tab selection
-  const metricFor = (s: Station) => {
-    if (tab === '1h') return s.lastReading.change1h;
-    if (tab === '24h') return s.lastReading.change24h;
-    // 7d is mocked by scaling 24h and adding tiny randomness to make it look different
-    return Number((s.lastReading.change24h * 2.6 + (Math.random() - 0.5) * 0.2).toFixed(2));
-  };
+  const { topRisers, topDroppers } = useMemo(() => {
+    const metricFor = (s: Station) => {
+      if (tab === '1h') return s.lastReading.change1h;
+      if (tab === '24h') return s.lastReading.change24h;
+      return Number((s.lastReading.change24h * 2.6 + (Math.random() - 0.5) * 0.2).toFixed(2));
+    };
 
-  const getTopChanges = (type: 'risers' | 'droppers', count: number = 5) => {
-    return [...stations]
+    const ranked: RankedStation[] = stations
       .filter(station => station.status !== 'Offline')
-      .sort((a, b) => type === 'risers' 
-        ? metricFor(b) - metricFor(a)
-        : metricFor(a) - metricFor(b)
-      )
-      .filter(s => type === 'risers' ? metricFor(s) > 0 : metricFor(s) < 0)
-      .slice(0, count);
-  };
+      .map(station => ({
+        station,
+        metric: metricFor(station),
+      }));
 
-  const topRisers = useMemo(() => getTopChanges('risers'), [stations, getTopChanges]);
-  const topDroppers = useMemo(() => getTopChanges('droppers'), [stations, getTopChanges]);
+    const risers = ranked
+      .filter(entry => entry.metric > 0)
+      .sort((a, b) => b.metric - a.metric)
+      .slice(0, 5);
 
-  const renderStationList = (stationList: Station[], type: 'risers' | 'droppers') => {
+    const droppers = ranked
+      .filter(entry => entry.metric < 0)
+      .sort((a, b) => a.metric - b.metric)
+      .slice(0, 5);
+
+    return { topRisers: risers, topDroppers: droppers };
+  }, [stations, tab]);
+
+  const renderStationList = (stationList: RankedStation[], type: 'risers' | 'droppers') => {
     const accent =
       type === 'risers'
         ? {
@@ -77,9 +87,9 @@ export default function TopChanges({ stations, onStationClick }: TopChangesProps
         ) : (
           stationList.map((station, index) => (
             <div 
-              key={station.id} 
+              key={station.station.id} 
               className={`group bg-zinc-950/40 border border-zinc-800 rounded-2xl px-4 py-3 cursor-pointer transition-all duration-200 hover:bg-zinc-950/60 ${accent.hover} min-w-[250px]`}
-              onClick={() => onStationClick && onStationClick(station)}
+              onClick={() => onStationClick && onStationClick(station.station)}
             >
               <div className="flex items-center gap-4">
                 <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-200 font-semibold text-sm">
@@ -91,25 +101,25 @@ export default function TopChanges({ stations, onStationClick }: TopChangesProps
                       <div className="flex items-center gap-2">
                         <MapPin size={13} className="text-zinc-500 shrink-0" />
                         <p className="font-semibold text-sm text-zinc-100 truncate group-hover:text-sky-200 transition-colors">
-                          {station.name}
+                          {station.station.name}
                         </p>
                       </div>
                       <div className="mt-2 flex items-center gap-2 flex-wrap text-[11px] text-zinc-500">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${statusBadge(station.status)}`}>
-                          {station.status}
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${statusBadge(station.station.status)}`}>
+                          {station.station.status}
                         </span>
-                        <span className="truncate">{station.basin}</span>
+                        <span className="truncate">{station.station.basin}</span>
                       </div>
                     </div>
                     <div className="shrink-0 text-right">
                       <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${accent.chip}`}>
                         <Icon size={16} className={accent.text} />
                         <span className={`text-sm font-semibold ${accent.text}`}>
-                          {Math.abs(metricFor(station)).toFixed(2)} m
+                          {Math.abs(station.metric).toFixed(2)} m
                         </span>
                       </div>
                       <p className="text-[11px] text-zinc-500 mt-2">
-                        Level {station.lastReading.waterLevel.toFixed(2)} m
+                        Level {station.station.lastReading.waterLevel.toFixed(2)} m
                       </p>
                     </div>
                   </div>
