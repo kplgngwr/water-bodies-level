@@ -1,13 +1,48 @@
 import { Alert, BasinSummary, Station, SystemStatus } from '@/types';
+import { onValue, ref } from 'firebase/database';
 import { mockAlerts, mockBasinSummaries, mockStations, mockSystemStatus } from './mockData';
+import { getFirebaseDatabase } from '../firebase';
 
 // Simulate API delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // API functions to fetch data
 export const fetchStations = async (): Promise<Station[]> => {
-  await delay(800); // Simulate network delay
-  return [...mockStations];
+  const database = getFirebaseDatabase();
+  if (!database) {
+    await delay(200);
+    return [...mockStations];
+  }
+
+  return new Promise<Station[]>((resolve, reject) => {
+    const stationsRef = ref(database, 'stations');
+    const unsubscribe = onValue(
+      stationsRef,
+      snapshot => {
+        unsubscribe();
+        const value = snapshot.val();
+        if (!value) {
+          resolve([]);
+          return;
+        }
+        const parsed: Station[] = Object.keys(value).map(key => ({
+          id: key,
+          ...value[key],
+        }));
+        resolve(parsed);
+      },
+      error => {
+        console.error('Failed to fetch stations from Firebase', error);
+        unsubscribe();
+        reject(error);
+      },
+      {
+        onlyOnce: true,
+      }
+    );
+  }).catch(() => {
+    return [...mockStations];
+  });
 };
 
 export const fetchStation = async (id: string): Promise<Station | null> => {

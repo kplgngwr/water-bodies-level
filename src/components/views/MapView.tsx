@@ -37,7 +37,7 @@ export default function MapView({
           showLiveIndicator
         />
       </div>
-      <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
         <LatestStations stations={stations} limit={6} />
         <TopChanges stations={stations} onStationClick={onStationSelect} />
       </div>

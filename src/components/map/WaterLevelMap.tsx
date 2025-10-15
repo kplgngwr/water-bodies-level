@@ -1,8 +1,10 @@
 'use client';
 
 import { Station } from '@/types';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import Map, { Marker, NavigationControl, Popup } from 'react-map-gl';
+import type { FeatureCollection } from 'geojson';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Map, { Layer, Marker, NavigationControl, Popup, Source } from 'react-map-gl';
+import type { MapLayerMouseEvent, MapRef } from 'react-map-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 interface WaterLevelMapProps {
@@ -15,6 +17,8 @@ interface WaterLevelMapProps {
   title?: string;
   subtitle?: string;
   showLiveIndicator?: boolean;
+  showWaterBodies?: boolean;
+  onWaterBodiesToggle?: (value: boolean) => void;
 }
 
 const STATUS_CONFIG: Record<Station['status'], {
@@ -66,7 +70,16 @@ export default function WaterLevelMap({
   title = 'Water Level Monitoring Stations',
   subtitle = 'Click on markers to view station details',
   showLiveIndicator = false,
+  showWaterBodies,
+  onWaterBodiesToggle,
 }: WaterLevelMapProps) {
+  interface Bounds {
+    west: number;
+    south: number;
+    east: number;
+    north: number;
+  }
+
   const [viewState, setViewState] = useState({
     longitude: 78.9629, // Center of India
     latitude: 20.5937,
@@ -76,6 +89,20 @@ export default function WaterLevelMap({
   const [popupInfo, setPopupInfo] = useState<Station | null>(null);
   const [internalRegion, setInternalRegion] = useState(regionFilter);
   const [internalStatusFilter, setInternalStatusFilter] = useState<Set<Station['status']>>(new Set());
+  const [internalShowWaterBodies, setInternalShowWaterBodies] = useState(false);
+  const [mapBounds, setMapBounds] = useState<Bounds | null>(null);
+  const [waterBodiesData, setWaterBodiesData] = useState<FeatureCollection | null>(null);
+  const [waterBodiesLoading, setWaterBodiesLoading] = useState(false);
+  const [waterBodiesError, setWaterBodiesError] = useState<string | null>(null);
+  const [waterBodyPopup, setWaterBodyPopup] = useState<{
+    coordinates: [number, number];
+    properties: Record<string, any>;
+  } | null>(null);
+
+  const mapRef = useRef<MapRef | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapReadyRef = useRef(false);
 
   useEffect(() => {
     setInternalRegion(regionFilter);
@@ -86,6 +113,13 @@ export default function WaterLevelMap({
       setInternalStatusFilter(new Set(statusFilter));
     }
   }, [statusFilter]);
+
+  useEffect(() => {
+    if (typeof showWaterBodies === 'boolean') {
+      setInternalShowWaterBodies(showWaterBodies);
+    }
+  }, [showWaterBodies]);
+
 
   const getMarkerColor = useCallback((status: Station['status']) => {
     return STATUS_CONFIG[status]?.marker ?? '#38bdf8';
@@ -105,6 +139,10 @@ export default function WaterLevelMap({
     }
     return internalStatusFilter;
   }, [onStatusFilterChange, statusFilter, internalStatusFilter]);
+
+  const showWaterBodiesActive = onWaterBodiesToggle
+    ? (typeof showWaterBodies === 'boolean' ? showWaterBodies : internalShowWaterBodies)
+    : internalShowWaterBodies;
 
   const handleRegionChange = (value: string) => {
     if (onRegionFilterChange) {
@@ -129,6 +167,27 @@ export default function WaterLevelMap({
       return next;
     });
   };
+
+  const handleWaterBodiesToggle = (checked: boolean) => {
+    if (onWaterBodiesToggle) {
+      onWaterBodiesToggle(checked);
+    } else {
+      setInternalShowWaterBodies(checked);
+    }
+  };
+
+  const updateBoundsFromMap = useCallback(() => {
+    if (!mapReadyRef.current) return;
+    const mapInstance = mapRef.current?.getMap();
+    if (!mapInstance) return;
+    const bounds = mapInstance.getBounds();
+    setMapBounds({
+      west: bounds.getWest(),
+      south: bounds.getSouth(),
+      east: bounds.getEast(),
+      north: bounds.getNorth(),
+    });
+  }, []);
 
   const filteredStations = useMemo(() => {
     return stations.filter(station => {
@@ -160,6 +219,137 @@ export default function WaterLevelMap({
       />
     ));
   }, [filteredStations, getMarkerColor]);
+
+  const arcgisUrl = useMemo(() => {
+    const base = process.env.NEXT_PUBLIC_ARCGIS_FEATURE_URL;
+    if (!base) return null;
+    return base.replace(/\/$/, '');
+  }, []);
+
+  const fetchWaterBodies = useCallback(async (bounds: Bounds) => {
+    if (!arcgisUrl) return;
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setWaterBodiesLoading(true);
+    setWaterBodiesError(null);
+
+    try {
+      const url = new URL(`${arcgisUrl}/query`);
+      url.searchParams.set('f', 'geojson');
+      url.searchParams.set('where', '1=1');
+      url.searchParams.set('outFields', '*');
+      url.searchParams.set('geometry', `${bounds.west},${bounds.south},${bounds.east},${bounds.north}`);
+      url.searchParams.set('geometryType', 'esriGeometryEnvelope');
+      url.searchParams.set('inSR', '4326');
+      url.searchParams.set('spatialRel', 'esriSpatialRelIntersects');
+      url.searchParams.set('outSR', '4326');
+      url.searchParams.set('resultRecordCount', '2000');
+      url.searchParams.set('returnGeometry', 'true');
+
+      const response = await fetch(url.toString(), { signal: controller.signal });
+      if (!response.ok) {
+        throw new Error(`ArcGIS response ${response.status}`);
+      }
+
+      const data = (await response.json()) as FeatureCollection;
+      setWaterBodiesData(data);
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        return;
+      }
+      console.error('Failed to load water bodies', error);
+      setWaterBodiesError('Unable to load water bodies for this view');
+    } finally {
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+      }
+      setWaterBodiesLoading(false);
+    }
+  }, [arcgisUrl]);
+
+  useEffect(() => {
+    if (!showWaterBodiesActive) {
+      setWaterBodiesData(null);
+      setWaterBodyPopup(null);
+      abortRef.current?.abort();
+      return;
+    }
+    if (!mapBounds) return;
+    fetchWaterBodies(mapBounds);
+  }, [showWaterBodiesActive, mapBounds, fetchWaterBodies]);
+
+  const handleMapClick = useCallback((event: MapLayerMouseEvent) => {
+    if (!showWaterBodiesActive) return;
+    const mapInstance = event.target;
+    const features = mapInstance.queryRenderedFeatures(event.point, {
+      layers: ['water-bodies-fill'],
+    });
+
+    if (features.length > 0) {
+      const feature = features[0];
+      const lngLat = event.lngLat;
+      setWaterBodyPopup({
+        coordinates: [lngLat.lng, lngLat.lat],
+        properties: feature.properties ?? {},
+      });
+    } else {
+      setWaterBodyPopup(null);
+    }
+  }, [showWaterBodiesActive]);
+
+  const formatArea = useCallback((properties: Record<string, any>) => {
+    const candidates = ['AREA_SQKM', 'Area_sqkm', 'area_sqkm', 'AREA', 'Shape_Area'];
+    for (const key of candidates) {
+      const raw = properties?.[key];
+      const value = typeof raw === 'string' ? Number(raw) : raw;
+      if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+        if (key.toLowerCase().includes('sqkm')) {
+          return `${value.toFixed(2)} sq km`;
+        }
+        const sqKm = value > 1_000 ? value / 1_000_000 : value;
+        return `${sqKm.toFixed(2)} sq km`;
+      }
+    }
+    return null;
+  }, []);
+
+  const resolveProperty = useCallback((properties: Record<string, any>, keys: string[], fallback = 'Unknown') => {
+    for (const key of keys) {
+      const value = properties?.[key];
+      if (typeof value === 'string' && value.trim().length > 0) {
+        return value.trim();
+      }
+    }
+    return fallback;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      mapReadyRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return;
+    if (!mapContainerRef.current) return;
+
+    const observer = new ResizeObserver(() => {
+      if (!mapReadyRef.current || !mapRef.current) return;
+      try {
+        mapRef.current.resize();
+        updateBoundsFromMap();
+      } catch (error) {
+        console.warn('Map resize failed', error);
+      }
+    });
+
+    observer.observe(mapContainerRef.current);
+    return () => observer.disconnect();
+  }, [updateBoundsFromMap]);
 
   return (
     <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 shadow-lg overflow-hidden">
@@ -230,16 +420,73 @@ export default function WaterLevelMap({
               );
             })}
           </div>
+          <div className="flex items-center gap-2 text-xs text-zinc-400">
+            <label
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full border border-zinc-800 bg-zinc-900/60 transition-colors ${
+                arcgisUrl ? 'cursor-pointer hover:border-zinc-700' : 'opacity-50 cursor-not-allowed'
+              }`}
+            >
+              <input
+                type="checkbox"
+                className="h-3.5 w-3.5 rounded border border-zinc-600 bg-zinc-950 text-sky-500 focus:ring-sky-500"
+                checked={showWaterBodiesActive}
+                onChange={(event) => handleWaterBodiesToggle(event.target.checked)}
+                disabled={!arcgisUrl}
+              />
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                Water Bodies
+              </span>
+              {waterBodiesLoading && (
+                <span className="flex h-1.5 w-1.5">
+                  <span className="animate-ping inline-flex h-full w-full rounded-full bg-sky-400/70 opacity-75" />
+                </span>
+              )}
+            </label>
+            {!arcgisUrl && (
+              <span className="text-[11px] text-zinc-500">ArcGIS endpoint not configured</span>
+            )}
+            {waterBodiesError && (
+              <span className="text-[11px] text-rose-300">{waterBodiesError}</span>
+            )}
+          </div>
         </div>
       </div>
       
-      <div className="h-[520px] w-full bg-zinc-950">
+      <div className="h-[520px] w-full bg-zinc-950" ref={mapContainerRef}>
         <Map
+          ref={mapRef}
           {...viewState}
           onMove={evt => setViewState(evt.viewState)}
+          onMoveEnd={updateBoundsFromMap}
+          onLoad={() => {
+            mapReadyRef.current = true;
+            updateBoundsFromMap();
+          }}
+          onClick={handleMapClick}
           mapStyle="mapbox://styles/mapbox/dark-v11"
           mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_API_KEY}
         >
+          {showWaterBodiesActive && waterBodiesData && (
+            <Source id="water-bodies-source" type="geojson" data={waterBodiesData}>
+              <Layer
+                id="water-bodies-fill"
+                type="fill"
+                paint={{
+                  'fill-color': '#38bdf8',
+                  'fill-opacity': 0.28,
+                }}
+              />
+              <Layer
+                id="water-bodies-outline"
+                type="line"
+                paint={{
+                  'line-color': '#38bdf8',
+                  'line-width': 1,
+                  'line-opacity': 0.6,
+                }}
+              />
+            </Source>
+          )}
           {markers}
           <NavigationControl position="top-right" />
           
@@ -299,6 +546,40 @@ export default function WaterLevelMap({
                     View Full Details
                   </button>
                 )}
+              </div>
+            </Popup>
+          )}
+          {showWaterBodiesActive && waterBodyPopup && (
+            <Popup
+              longitude={waterBodyPopup.coordinates[0]}
+              latitude={waterBodyPopup.coordinates[1]}
+              anchor="top"
+              onClose={() => setWaterBodyPopup(null)}
+              closeButton
+              closeOnClick={false}
+            >
+              <div className="p-3 min-w-[220px] space-y-1 text-[11px] text-zinc-400">
+                <h3 className="font-semibold text-sm text-zinc-100 mb-1">
+                  {resolveProperty(waterBodyPopup.properties, ['NAME', 'Name', 'WATERBODY', 'Waterbody', 'waterbody'], 'Water Body')}
+                </h3>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">State</span>
+                  <span className="text-zinc-200 font-medium">
+                    {resolveProperty(waterBodyPopup.properties, ['STATE', 'STATE_NAME', 'State'], 'Unknown')}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Area</span>
+                  <span className="text-zinc-200 font-medium">
+                    {formatArea(waterBodyPopup.properties) ?? 'Not provided'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Category</span>
+                  <span className="text-zinc-200 font-medium">
+                    {resolveProperty(waterBodyPopup.properties, ['CATEGORY', 'Type', 'TYPE'], 'N/A')}
+                  </span>
+                </div>
               </div>
             </Popup>
           )}

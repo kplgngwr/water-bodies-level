@@ -52,7 +52,7 @@ export default function DashboardView({
             showLiveIndicator
           />
         </div>
-        <div className="grid grid-cols-1 space-y-4">
+        <div className="grid grid-cols-1 space-y-4 gap-3">
           <AlertTicker alerts={alerts} onAcknowledge={onAlertAcknowledge} />
           <TopChanges stations={stations} />
         </div>
