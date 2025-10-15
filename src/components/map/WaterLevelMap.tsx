@@ -1,7 +1,7 @@
 'use client';
 
 import { Station } from '@/types';
-import type { FeatureCollection } from 'geojson';
+import type { FeatureCollection, Geometry } from 'geojson';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Map, { Layer, Marker, NavigationControl, Popup, Source } from 'react-map-gl';
 import type { MapLayerMouseEvent, MapRef } from 'react-map-gl';
@@ -91,12 +91,37 @@ export default function WaterLevelMap({
   const [internalStatusFilter, setInternalStatusFilter] = useState<Set<Station['status']>>(new Set());
   const [internalShowWaterBodies, setInternalShowWaterBodies] = useState(false);
   const [mapBounds, setMapBounds] = useState<Bounds | null>(null);
-  const [waterBodiesData, setWaterBodiesData] = useState<FeatureCollection | null>(null);
+
+  interface WaterBodyProperties {
+    objectid?: number;
+    state?: string;
+    wetcode?: number;
+    wetname?: string;
+    aqveg?: string;
+    turb?: string;
+    level_i?: string;
+    level_ii?: string;
+    level_iii?: string;
+    l4type?: string;
+    area_ha?: number;
+    rem?: string;
+    lat?: number;
+    long?: number;
+    ds_name?: string;
+    src_agency?: string;
+    shape?: unknown;
+    'st_area(shape)'?: number;
+    'st_perimeter(shape)'?: number;
+    st_area_shape_?: number;
+    st_perimeter_shape_?: number;
+  }
+
+  const [waterBodiesData, setWaterBodiesData] = useState<FeatureCollection<Geometry, WaterBodyProperties> | null>(null);
   const [waterBodiesLoading, setWaterBodiesLoading] = useState(false);
   const [waterBodiesError, setWaterBodiesError] = useState<string | null>(null);
   const [waterBodyPopup, setWaterBodyPopup] = useState<{
     coordinates: [number, number];
-    properties: Record<string, unknown>;
+    properties: WaterBodyProperties;
   } | null>(null);
 
   const mapRef = useRef<MapRef | null>(null);
@@ -251,7 +276,27 @@ export default function WaterLevelMap({
       const url = new URL(`${arcgisUrl}/query`);
       url.searchParams.set('f', 'geojson');
       url.searchParams.set('where', '1=1');
-      url.searchParams.set('outFields', '*');
+      const outFields = [
+        'objectid',
+        'state',
+        'wetcode',
+        'wetname',
+        'aqveg',
+        'turb',
+        'level_i',
+        'level_ii',
+        'level_iii',
+        'l4type',
+        'area_ha',
+        'rem',
+        'lat',
+        'long',
+        'ds_name',
+        'src_agency',
+        'st_area(shape)',
+        'st_perimeter(shape)',
+      ];
+      url.searchParams.set('outFields', outFields.join(','));
       url.searchParams.set('geometry', `${bounds.west},${bounds.south},${bounds.east},${bounds.north}`);
       url.searchParams.set('geometryType', 'esriGeometryEnvelope');
       url.searchParams.set('inSR', '4326');
@@ -265,7 +310,7 @@ export default function WaterLevelMap({
         throw new Error(`ArcGIS response ${response.status}`);
       }
 
-      const data = (await response.json()) as FeatureCollection;
+      const data = (await response.json()) as FeatureCollection<Geometry, WaterBodyProperties>;
       setWaterBodiesData(data);
     } catch (error: unknown) {
       if ((error as Error).name === 'AbortError') {
@@ -304,38 +349,74 @@ export default function WaterLevelMap({
       const lngLat = event.lngLat;
       setWaterBodyPopup({
         coordinates: [lngLat.lng, lngLat.lat],
-        properties: feature.properties ?? {},
+        properties: (feature.properties ?? {}) as WaterBodyProperties,
       });
     } else {
       setWaterBodyPopup(null);
     }
   }, [showWaterBodiesActive]);
 
-  const formatArea = useCallback((properties: Record<string, unknown>) => {
-    const candidates = ['AREA_SQKM', 'Area_sqkm', 'area_sqkm', 'AREA', 'Shape_Area'];
-    for (const key of candidates) {
-      const raw = properties?.[key];
-      const value = typeof raw === 'string' ? Number(raw) : raw;
-      if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
-        if (key.toLowerCase().includes('sqkm')) {
-          return `${value.toFixed(2)} sq km`;
-        }
-        const sqKm = value > 1_000 ? value / 1_000_000 : value;
-        return `${sqKm.toFixed(2)} sq km`;
+  const formatArea = useCallback((properties: WaterBodyProperties) => {
+    const candidates: Array<[unknown, 'hectare' | 'squareMeter']> = [
+      [properties.area_ha, 'hectare'],
+      [properties['st_area(shape)'], 'squareMeter'],
+      [properties.st_area_shape_, 'squareMeter'],
+    ];
+
+    for (const [rawValue, unit] of candidates) {
+      if (rawValue == null) continue;
+      const value = typeof rawValue === 'string' ? Number(rawValue) : (rawValue as number);
+      if (!Number.isFinite(value) || value <= 0) continue;
+
+      if (unit === 'hectare') {
+        return `${value.toFixed(2)} ha`;
       }
+
+      const hectares = value / 10_000;
+      return `${hectares.toFixed(2)} ha`;
     }
+
     return null;
   }, []);
 
-  const resolveProperty = useCallback((properties: Record<string, unknown>, keys: string[], fallback = 'Unknown') => {
+  const resolveProperty = useCallback(
+    (properties: WaterBodyProperties, keys: Array<keyof WaterBodyProperties | string>, fallback = 'Unknown') => {
+      for (const key of keys) {
+        const value = (properties as Record<string, unknown>)?.[key as string];
+        if (typeof value === 'string' && value.trim().length > 0) {
+          return value.trim();
+        }
+      }
+      return fallback;
+    },
+    []
+  );
+
+  const resolveNumeric = useCallback((properties: WaterBodyProperties, keys: Array<keyof WaterBodyProperties | string>) => {
     for (const key of keys) {
-      const value = properties?.[key];
+      const value = (properties as Record<string, unknown>)?.[key as string];
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+      }
       if (typeof value === 'string' && value.trim().length > 0) {
-        return value.trim();
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) {
+          return parsed;
+        }
       }
     }
-    return fallback;
+    return undefined;
   }, []);
+
+  const resolveClassification = useCallback((properties: WaterBodyProperties) => {
+    const segments = [
+      resolveProperty(properties, ['level_i'], ''),
+      resolveProperty(properties, ['level_ii'], ''),
+      resolveProperty(properties, ['level_iii'], ''),
+    ].filter(Boolean);
+
+    return segments.length > 0 ? segments.join(' | ') : 'Not classified';
+  }, [resolveProperty]);
 
   useEffect(() => {
     return () => {
@@ -571,12 +652,12 @@ export default function WaterLevelMap({
             >
               <div className="p-3 min-w-[220px] space-y-1 text-[11px] text-zinc-400">
                 <h3 className="font-semibold text-sm text-zinc-100 mb-1">
-                  {resolveProperty(waterBodyPopup.properties, ['NAME', 'Name', 'WATERBODY', 'Waterbody', 'waterbody'], 'Water Body')}
+                  {resolveProperty(waterBodyPopup.properties, ['wetname'], 'Water Body')}
                 </h3>
                 <div className="flex justify-between">
                   <span className="text-zinc-500">State</span>
                   <span className="text-zinc-200 font-medium">
-                    {resolveProperty(waterBodyPopup.properties, ['STATE', 'STATE_NAME', 'State'], 'Unknown')}
+                    {resolveProperty(waterBodyPopup.properties, ['state'], 'Unknown')}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -586,9 +667,39 @@ export default function WaterLevelMap({
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-zinc-500">Category</span>
+                  <span className="text-zinc-500">Classification</span>
                   <span className="text-zinc-200 font-medium">
-                    {resolveProperty(waterBodyPopup.properties, ['CATEGORY', 'Type', 'TYPE'], 'N/A')}
+                    {resolveClassification(waterBodyPopup.properties)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Aquatic vegetation</span>
+                  <span className="text-zinc-200 font-medium">
+                    {resolveProperty(waterBodyPopup.properties, ['aqveg'], 'Not recorded')}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Turbidity</span>
+                  <span className="text-zinc-200 font-medium">
+                    {resolveProperty(waterBodyPopup.properties, ['turb'], 'Not recorded')}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Wet Code</span>
+                  <span className="text-zinc-200 font-medium">
+                    {resolveNumeric(waterBodyPopup.properties, ['wetcode']) ?? 'N/A'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Source</span>
+                  <span className="text-zinc-200 font-medium">
+                    {resolveProperty(waterBodyPopup.properties, ['src_agency', 'ds_name'], 'Unknown agency')}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Remarks</span>
+                  <span className="text-zinc-200 font-medium">
+                    {resolveProperty(waterBodyPopup.properties, ['rem'], '—')}
                   </span>
                 </div>
               </div>
