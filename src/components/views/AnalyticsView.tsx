@@ -9,43 +9,65 @@ interface AnalyticsViewProps {
   basins: BasinSummary[];
 }
 
-const STATUS_COLORS: Record<Station['status'], { bar: string; text: string }> = {
+const STATUS_COLORS: Record<Station['status'] | 'Unknown', { bar: string; text: string }> = {
   Normal: { bar: 'bg-emerald-500', text: 'text-emerald-300' },
   Warning: { bar: 'bg-amber-500', text: 'text-amber-300' },
   Danger: { bar: 'bg-rose-500', text: 'text-rose-300' },
   Offline: { bar: 'bg-slate-500', text: 'text-slate-300' },
+  Unknown: { bar: 'bg-zinc-700', text: 'text-zinc-300' },
 };
 
 export default function AnalyticsView({ stations, basins }: AnalyticsViewProps) {
+  const normalizeStatus = (status: Station['status'] | string): keyof typeof STATUS_COLORS => {
+    if (status === 'Normal' || status === 'Warning' || status === 'Danger' || status === 'Offline') {
+      return status;
+    }
+    return 'Unknown';
+  };
+
   const totalStations = stations.length;
-  const safeTotalStations = Math.max(1, totalStations);
+  
   const activeStations = stations.filter((station) => station.status !== 'Offline').length;
   const warningStations = stations.filter((station) => station.status === 'Warning').length;
   const dangerStations = stations.filter((station) => station.status === 'Danger').length;
   const offlineStations = stations.filter((station) => station.status === 'Offline').length;
 
+  const stationsWithReadings = stations.filter(
+    (station) =>
+      typeof station.lastReading?.waterLevel === 'number' &&
+      typeof station.lastReading?.change24h === 'number' &&
+      typeof station.lastReading?.change1h === 'number'
+  );
+
   const averageLevel =
-    totalStations === 0
+    stationsWithReadings.length === 0
       ? 0
-      : stations.reduce((sum, station) => sum + station.lastReading.waterLevel, 0) / safeTotalStations;
+      : stationsWithReadings.reduce((sum, station) => sum + (station.lastReading?.waterLevel ?? 0), 0) /
+        Math.max(1, stationsWithReadings.length);
+
   const averageChange24h =
-    totalStations === 0
+    stationsWithReadings.length === 0
       ? 0
-      : stations.reduce((sum, station) => sum + station.lastReading.change24h, 0) / safeTotalStations;
+      : stationsWithReadings.reduce((sum, station) => sum + (station.lastReading?.change24h ?? 0), 0) /
+        Math.max(1, stationsWithReadings.length);
 
-  const risers = [...stations]
-    .sort((a, b) => b.lastReading.change24h - a.lastReading.change24h)
-    .slice(0, 5);
-  const droppers = [...stations]
-    .sort((a, b) => a.lastReading.change24h - b.lastReading.change24h)
+  const risers = stationsWithReadings
+    .filter((station) => (station.lastReading?.change24h ?? 0) > 0)
+    .sort((a, b) => (b.lastReading?.change24h ?? 0) - (a.lastReading?.change24h ?? 0))
     .slice(0, 5);
 
-  const statusDistribution = stations.reduce<Record<Station['status'], number>>(
+  const droppers = stationsWithReadings
+    .filter((station) => (station.lastReading?.change24h ?? 0) < 0)
+    .sort((a, b) => (a.lastReading?.change24h ?? 0) - (b.lastReading?.change24h ?? 0))
+    .slice(0, 5);
+
+  const statusDistribution = stations.reduce<Record<keyof typeof STATUS_COLORS, number>>(
     (acc, station) => {
-      acc[station.status] = (acc[station.status] ?? 0) + 1;
+      const key = normalizeStatus(station.status as string);
+      acc[key] = (acc[key] ?? 0) + 1;
       return acc;
     },
-    { Normal: 0, Warning: 0, Danger: 0, Offline: 0 }
+    { Normal: 0, Warning: 0, Danger: 0, Offline: 0, Unknown: 0 }
   );
 
   const basinTrends = [...basins].sort((a, b) => Math.abs(b.avgChange24h) - Math.abs(a.avgChange24h));
@@ -97,14 +119,17 @@ export default function AnalyticsView({ stations, basins }: AnalyticsViewProps) 
             </span>
           </div>
           <div className="p-4 space-y-3">
-            {(Object.keys(statusDistribution) as Array<Station['status']>).map((status) => {
-              const count = statusDistribution[status];
+            {(Object.keys(statusDistribution) as Array<keyof typeof STATUS_COLORS>).map((statusKey) => {
+              const count = statusDistribution[statusKey];
               const percentage = totalStations === 0 ? 0 : Math.round((count / totalStations) * 100);
-              const colors = STATUS_COLORS[status];
+              const colors = STATUS_COLORS[statusKey] ?? STATUS_COLORS.Unknown;
+              if (count === 0 && statusKey === 'Unknown') {
+                return null;
+              }
               return (
-                <div key={status} className="space-y-2">
+                <div key={statusKey} className="space-y-2">
                   <div className="flex items-center justify-between text-xs text-zinc-400">
-                    <span className="uppercase tracking-wide">{status}</span>
+                    <span className="uppercase tracking-wide">{statusKey}</span>
                     <span className={`${colors.text} font-semibold`}>
                       {count} ({percentage}%)
                     </span>
@@ -190,10 +215,12 @@ export default function AnalyticsView({ stations, basins }: AnalyticsViewProps) 
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-sm font-semibold text-rose-300">
-                    +{station.lastReading.change24h.toFixed(2)} m
+                    +{(station.lastReading?.change24h ?? 0).toFixed(2)} m
                   </p>
                   <p className="text-[11px] text-zinc-500">
-                    Level {station.lastReading.waterLevel.toFixed(1)} m
+                    Level {typeof station.lastReading?.waterLevel === 'number'
+                      ? station.lastReading.waterLevel.toFixed(1)
+                      : 'N/A'} m
                   </p>
                 </div>
               </div>
@@ -228,10 +255,12 @@ export default function AnalyticsView({ stations, basins }: AnalyticsViewProps) 
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-sm font-semibold text-emerald-300">
-                    {station.lastReading.change24h.toFixed(2)} m
+                    {(station.lastReading?.change24h ?? 0).toFixed(2)} m
                   </p>
                   <p className="text-[11px] text-zinc-500">
-                    Level {station.lastReading.waterLevel.toFixed(1)} m
+                    Level {typeof station.lastReading?.waterLevel === 'number'
+                      ? station.lastReading.waterLevel.toFixed(1)
+                      : 'N/A'} m
                   </p>
                 </div>
               </div>
